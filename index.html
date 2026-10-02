@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="description" content="Goal-pace split calculator for swim sets. Enter a race distance and goal time, get repeat paces.">
+<title>TSM Split Calculator</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='18' r='11' fill='none' stroke='%230d6f7a' stroke-width='3'/%3E%3Cpath d='M16 18V11' stroke='%230d6f7a' stroke-width='3' stroke-linecap='round'/%3E%3Cpath d='M12 3h8' stroke='%230d6f7a' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: one control strip, then a single large pace list sized to read from the deck. */
+:root{
+  --bg:#f2f5f7; --surface:#ffffff; --surface-2:#e6ecf0; --line:#ccd8df;
+  --fg:#0e1f2a; --fg-dim:#52697a;
+  --accent:#0d6f7a; --on-accent:#ffffff; --gold:#a96f12;
+  --font-head:"Oswald","Haettenschweiler","Arial Narrow",sans-serif;
+  --font-body:"Barlow","Helvetica Neue",Arial,sans-serif;
+  --font-num:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+  color-scheme:light;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#0b1620; --surface:#11222e; --surface-2:#17303e; --line:#26485a;
+    --fg:#e6eef3; --fg-dim:#93adbd;
+    --accent:#45c7d4; --on-accent:#06161b; --gold:#e8b53a;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0b1620; --surface:#11222e; --surface-2:#17303e; --line:#26485a;
+  --fg:#e6eef3; --fg-dim:#93adbd;
+  --accent:#45c7d4; --on-accent:#06161b; --gold:#e8b53a;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+img{max-width:100%}
+[hidden]{display:none!important}
+body{
+  background:var(--bg); color:var(--fg);
+  font-family:var(--font-body); font-size:15px; line-height:1.5;
+  -webkit-text-size-adjust:100%;
+}
+.wrap{max-width:760px; margin:0 auto; padding-inline:18px; padding-block:26px 56px;
+  display:flex; flex-direction:column; gap:22px}
+
+.masthead{display:flex; flex-direction:column; gap:4px; border-bottom:2px solid var(--fg); padding-bottom:11px}
+.masthead .eyebrow{font-family:var(--font-head); font-size:12px; letter-spacing:.16em;
+  text-transform:uppercase; color:var(--accent)}
+h1{font-family:var(--font-head); font-weight:600; font-size:clamp(27px,6vw,40px);
+  line-height:1.02; margin:0; letter-spacing:.01em; text-transform:uppercase; text-wrap:balance}
+
+.panel{background:var(--surface); border:1px solid var(--line); border-radius:4px;
+  display:grid; grid-template-columns:repeat(auto-fit,minmax(215px,1fr))}
+.field{padding:15px 17px; border-right:1px solid var(--line); border-bottom:1px solid var(--line);
+  display:flex; flex-direction:column; gap:9px; min-width:0}
+.field:last-child{border-right:0}
+.field.goal{grid-column:1/-1; border-bottom:0; border-right:0; background:var(--surface-2)}
+.key{font-family:var(--font-head); font-size:11px; letter-spacing:.14em;
+  text-transform:uppercase; color:var(--fg-dim)}
+
+.pills{display:flex; flex-wrap:wrap; gap:5px}
+.pill{font-family:var(--font-num); font-size:13px; font-weight:500;
+  background:var(--surface-2); color:var(--fg); border:1px solid var(--line);
+  border-radius:3px; padding:6px 10px; cursor:pointer; line-height:1.1}
+.pill:hover{border-color:var(--accent)}
+.pill[aria-pressed="true"]{background:var(--accent); border-color:var(--accent); color:var(--on-accent)}
+
+input[type=number]{
+  font-family:var(--font-num); font-size:16px; font-weight:500;
+  background:var(--bg); color:var(--fg); border:1px solid var(--line);
+  border-radius:3px; padding:7px 9px; width:100%; min-width:0}
+input:focus-visible,.pill:focus-visible{outline:2px solid var(--accent); outline-offset:1px}
+.custom{display:flex; align-items:center; gap:7px}
+.custom input{max-width:110px}
+.custom span{font-size:12.5px; color:var(--fg-dim)}
+
+/* goal time: three numeric fields so a phone keypad is enough */
+.timefields{display:flex; align-items:flex-end; gap:7px; max-width:430px; width:100%}
+.tf{display:flex; flex-direction:column; gap:5px; align-items:center; min-width:0; flex:1 1 0}
+.tf.m{flex:0.85 1 0}
+.tf label{font-family:var(--font-head); font-size:10.5px; letter-spacing:.13em;
+  text-transform:uppercase; color:var(--fg-dim)}
+.tf input{
+  font-family:var(--font-num); font-size:clamp(30px,8.5vw,42px); font-weight:600;
+  text-align:center; letter-spacing:.02em; line-height:1.1;
+  padding:11px 2px; width:100%; min-width:0;
+  background:var(--surface); color:var(--fg);
+  border:1px solid var(--line); border-radius:4px;
+  -moz-appearance:textfield; appearance:textfield}
+.tf input::-webkit-outer-spin-button,.tf input::-webkit-inner-spin-button{-webkit-appearance:none; margin:0}
+.tf input:focus{border-color:var(--accent); outline:2px solid var(--accent); outline-offset:-1px}
+.sep{flex:0 0 auto; font-family:var(--font-num); font-weight:600; color:var(--fg-dim);
+  font-size:clamp(22px,6vw,32px); padding-bottom:13px}
+
+.paces{background:var(--surface); border:1px solid var(--line); border-radius:4px; overflow:hidden}
+.prow{display:flex; align-items:baseline; justify-content:space-between; gap:14px;
+  padding:13px 18px; border-bottom:1px solid var(--line)}
+.prow:last-child{border-bottom:0}
+.prow:nth-child(odd){background:color-mix(in srgb,var(--surface-2) 45%,transparent)}
+.plabel{font-family:var(--font-head); font-size:clamp(17px,3.6vw,21px); font-weight:500;
+  letter-spacing:.03em; text-transform:uppercase}
+.plabel .u{color:var(--fg-dim); font-size:.72em; margin-left:3px}
+.ptime{font-family:var(--font-num); font-size:clamp(24px,6vw,34px); font-weight:600;
+  font-variant-numeric:tabular-nums; line-height:1; text-align:right; overflow-wrap:anywhere}
+.pracehdr{display:flex; align-items:baseline; justify-content:space-between; gap:14px;
+  padding:11px 18px; background:var(--accent); color:var(--on-accent)}
+.pracehdr .l{font-family:var(--font-head); font-size:12px; letter-spacing:.15em; text-transform:uppercase}
+.pracehdr .r{font-family:var(--font-num); font-size:15px; font-weight:600; font-variant-numeric:tabular-nums}
+
+.msg{background:var(--surface); border:1px solid var(--gold); border-left:4px solid var(--gold);
+  border-radius:4px; padding:12px 15px}
+@media (max-width:560px){
+  .field{border-right:0}
+  .prow{padding:12px 14px}
+}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <div class="eyebrow">TSM Aquatics &middot; pace board</div>
+    <h1>TSM Split Calculator</h1>
+  </header>
+
+  <div class="panel">
+    <div class="field">
+      <span class="key">Course</span>
+      <div class="pills" id="coursePills"></div>
+    </div>
+    <div class="field">
+      <span class="key">Stroke</span>
+      <div class="pills" id="strokePills"></div>
+    </div>
+    <div class="field">
+      <span class="key">Race distance</span>
+      <div class="pills" id="racePills"></div>
+      <div class="custom">
+        <input type="number" id="raceCustom" min="25" step="25" placeholder="other">
+        <span id="customUnit">yd</span>
+      </div>
+    </div>
+    <div class="field goal">
+      <span class="key">Goal time</span>
+      <div class="timefields">
+        <div class="tf m">
+          <label for="tMin">Min</label>
+          <input id="tMin" type="number" inputmode="numeric" pattern="[0-9]*"
+                 min="0" max="99" step="1" value="5" autocomplete="off">
+        </div>
+        <span class="sep">:</span>
+        <div class="tf">
+          <label for="tSec">Sec</label>
+          <input id="tSec" type="number" inputmode="numeric" pattern="[0-9]*"
+                 min="0" max="59" step="1" value="00" autocomplete="off">
+        </div>
+        <span class="sep">.</span>
+        <div class="tf">
+          <label for="tHun">Hundredths</label>
+          <input id="tHun" type="number" inputmode="numeric" pattern="[0-9]*"
+                 min="0" max="99" step="1" value="00" autocomplete="off">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="out"></div>
+
+</div>
+
+<script>
+"use strict";
+var $ = function(s){ return document.querySelector(s); };
+
+var COURSES = {
+  scy: { label:"25 yd", unit:"yd", len:25,
+         races:[50,100,200,400,500,1000,1650],
+         splits:[25,50,75,100,125,150,200] },
+  scm: { label:"25 m", unit:"m", len:25,
+         races:[50,100,200,400,800,1500],
+         splits:[50,100,150,200,300,400,500] },
+  lcm: { label:"50 m", unit:"m", len:50,
+         races:[50,100,200,400,800,1500],
+         splits:[50,100,150,200,300,400,500] }
+};
+
+/* Per-turn values, seconds. Set by Coach Mo. */
+var STROKES = {
+  free:   { label:"Free",   turn:0.50 },
+  back:   { label:"Back",   turn:0.60 },
+  breast: { label:"Breast", turn:1.00 },
+  fly:    { label:"Fly",    turn:1.00 }
+};
+/* Start allowance: a racing dive against a push off the wall, seconds. */
+var DIVE = 0.80;
+
+var state = { course:"scy", stroke:"free", race:500, goal:300 };
+
+function digits(v, cap){
+  var d = String(v == null ? "" : v).replace(/[^0-9]/g, "").slice(0, 2);
+  if(d === "") return null;
+  var n = parseInt(d, 10);
+  if(!isFinite(n)) return null;
+  return n > cap ? cap : n;
+}
+
+function readGoal(){
+  var m = digits($("#tMin").value, 99);
+  var s = digits($("#tSec").value, 59);
+  var h = digits($("#tHun").value, 99);
+  var total = (m || 0) * 60 + (s || 0) + (h || 0) / 100;
+  return (m === null && s === null && h === null) ? NaN : total;
+}
+
+function fmt(sec){
+  if(!isFinite(sec)) return "—";
+  var total = Math.round(Math.abs(sec) * 100);
+  var whole = Math.floor(total / 100);
+  var frac = total - whole * 100;
+  var m = Math.floor(whole / 60);
+  var s = whole - m * 60;
+  var f = "." + String(frac).padStart(2, "0");
+  var body = m > 0 ? m + ":" + String(s).padStart(2, "0") + f : s + f;
+  return (sec < 0 ? "−" : "") + body;
+}
+
+function mkPill(label, pressed, onClick){
+  var b = document.createElement("button");
+  b.type = "button";
+  b.className = "pill";
+  b.textContent = label;
+  b.setAttribute("aria-pressed", pressed ? "true" : "false");
+  b.addEventListener("click", onClick);
+  return b;
+}
+
+function buildPills(){
+  var cp = $("#coursePills");
+  cp.textContent = "";
+  Object.keys(COURSES).forEach(function(k){
+    cp.appendChild(mkPill(COURSES[k].label, state.course === k, function(){
+      state.course = k;
+      var c = COURSES[k];
+      if(c.races.indexOf(state.race) === -1){ state.race = (k === "scy") ? 500 : 400; }
+      $("#raceCustom").value = "";
+      render();
+    }));
+  });
+
+  var sp = $("#strokePills");
+  sp.textContent = "";
+  Object.keys(STROKES).forEach(function(k){
+    sp.appendChild(mkPill(STROKES[k].label, state.stroke === k, function(){
+      state.stroke = k;
+      render();
+    }));
+  });
+
+  var rp = $("#racePills");
+  rp.textContent = "";
+  COURSES[state.course].races.forEach(function(d){
+    rp.appendChild(mkPill(String(d), state.race === d, function(){
+      state.race = d;
+      $("#raceCustom").value = "";
+      render();
+    }));
+  });
+
+  $("#customUnit").textContent = COURSES[state.course].unit;
+}
+
+function render(){
+  buildPills();
+  var c = COURSES[state.course];
+  var turn = STROKES[state.stroke].turn;
+  var out = $("#out");
+
+  if(!(state.goal > 0)){
+    out.innerHTML = '<div class="msg">Enter a goal time above.</div>';
+    return;
+  }
+
+  var N = state.race / c.len;
+  var s = (state.goal + DIVE - (N - 1) * turn) / N;
+
+  if(!(s > 0)){
+    out.innerHTML = '<div class="msg">That goal time is too fast for the ' + state.race +
+      " " + c.unit + " to be possible. Check the distance and the time.</div>";
+    return;
+  }
+
+  var rows = c.splits.filter(function(d){ return d <= state.race; });
+  var html = '<div class="paces">';
+  html += '<div class="pracehdr"><span class="l">' + state.race + " " + c.unit + " · " +
+    STROKES[state.stroke].label + " · " + c.label +
+    '</span><span class="r">' + fmt(state.goal) + "</span></div>";
+  rows.forEach(function(d){
+    var n = d / c.len;
+    var t = n * s + (n - 1) * turn;
+    html += '<div class="prow"><span class="plabel">' + d +
+      '<span class="u">' + c.unit + '</span></span>' +
+      '<span class="ptime">' + fmt(t) + "</span></div>";
+  });
+  html += "</div>";
+  out.innerHTML = html;
+}
+
+/* --- goal time fields --- */
+var FIELDS = [
+  { el:"#tMin", cap:99, pad:0, next:"#tSec" },
+  { el:"#tSec", cap:59, pad:2, next:"#tHun", prev:"#tMin" },
+  { el:"#tHun", cap:99, pad:2, prev:"#tSec" }
+];
+
+FIELDS.forEach(function(f){
+  var input = $(f.el);
+
+  input.addEventListener("focus", function(){
+    setTimeout(function(){ try { input.select(); } catch(err){} }, 0);
+  });
+
+  input.addEventListener("input", function(){
+    var raw = String(input.value).replace(/[^0-9]/g, "").slice(0, 2);
+    if(raw !== input.value) input.value = raw;
+    var n = raw === "" ? null : parseInt(raw, 10);
+    if(n !== null && n > f.cap){ input.value = String(f.cap); }
+    state.goal = readGoal();
+    render();
+    if(f.next && input.value.length === 2){
+      var nx = $(f.next);
+      nx.focus();
+      try { nx.select(); } catch(err){}
+    }
+  });
+
+  input.addEventListener("keydown", function(e){
+    if(e.key === "Backspace" && input.value === "" && f.prev){
+      e.preventDefault();
+      $(f.prev).focus();
+    }
+  });
+
+  input.addEventListener("blur", function(){
+    var n = digits(input.value, f.cap);
+    input.value = n === null ? (f.pad ? "00" : "0")
+                             : (f.pad ? String(n).padStart(f.pad, "0") : String(n));
+    state.goal = readGoal();
+    render();
+  });
+});
+
+$("#raceCustom").addEventListener("input", function(e){
+  var v = Number(e.target.value);
+  if(isFinite(v) && v > 0){ state.race = v; render(); }
+});
+
+state.goal = readGoal();
+render();
+</script>
+</body>
+</html>
