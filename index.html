@@ -1,0 +1,698 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="description" content="Build a set of goal paces for swim training and see the repeat splits grouped by race distance.">
+<title>TSM Split Calculator</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='18' r='11' fill='none' stroke='%230d6f7a' stroke-width='3'/%3E%3Cpath d='M16 18V11' stroke='%230d6f7a' stroke-width='3' stroke-linecap='round'/%3E%3Cpath d='M12 3h8' stroke='%230d6f7a' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: a builder strip on top, then one split table per race distance. */
+:root{
+  --bg:#f2f5f7; --surface:#ffffff; --surface-2:#e6ecf0; --line:#ccd8df;
+  --fg:#0e1f2a; --fg-dim:#52697a;
+  --accent:#0d6f7a; --on-accent:#ffffff; --gold:#a96f12; --warn:#9c3b1f;
+  --font-head:"Oswald","Haettenschweiler","Arial Narrow",sans-serif;
+  --font-body:"Barlow","Helvetica Neue",Arial,sans-serif;
+  --font-num:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+  color-scheme:light;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#0b1620; --surface:#11222e; --surface-2:#17303e; --line:#26485a;
+    --fg:#e6eef3; --fg-dim:#93adbd;
+    --accent:#45c7d4; --on-accent:#06161b; --gold:#e8b53a; --warn:#e8936f;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0b1620; --surface:#11222e; --surface-2:#17303e; --line:#26485a;
+  --fg:#e6eef3; --fg-dim:#93adbd;
+  --accent:#45c7d4; --on-accent:#06161b; --gold:#e8b53a; --warn:#e8936f;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+img{max-width:100%}
+[hidden]{display:none!important}
+body{
+  background:var(--bg); color:var(--fg);
+  font-family:var(--font-body); font-size:15px; line-height:1.5;
+  -webkit-text-size-adjust:100%;
+}
+.wrap{max-width:900px; margin:0 auto; padding-inline:18px; padding-block:26px 56px;
+  display:flex; flex-direction:column; gap:22px}
+
+.masthead{display:flex; flex-direction:column; gap:4px; border-bottom:2px solid var(--fg); padding-bottom:11px}
+.masthead .eyebrow{font-family:var(--font-head); font-size:12px; letter-spacing:.16em;
+  text-transform:uppercase; color:var(--accent)}
+h1{font-family:var(--font-head); font-weight:600; font-size:clamp(27px,6vw,40px);
+  line-height:1.02; margin:0; letter-spacing:.01em; text-transform:uppercase; text-wrap:balance}
+
+.panel{background:var(--surface); border:1px solid var(--line); border-radius:4px;
+  display:grid; grid-template-columns:repeat(auto-fit,minmax(205px,1fr))}
+.field{padding:14px 16px; border-right:1px solid var(--line); border-bottom:1px solid var(--line);
+  display:flex; flex-direction:column; gap:8px; min-width:0}
+.field:last-child{border-right:0}
+.field.goal{grid-column:1/-1; border-right:0; border-bottom:0; background:var(--surface-2)}
+.key{font-family:var(--font-head); font-size:11px; letter-spacing:.14em;
+  text-transform:uppercase; color:var(--fg-dim)}
+
+.pills{display:flex; flex-wrap:wrap; gap:5px}
+.pill{font-family:var(--font-num); font-size:13px; font-weight:500;
+  background:var(--surface-2); color:var(--fg); border:1px solid var(--line);
+  border-radius:3px; padding:6px 10px; cursor:pointer; line-height:1.1}
+.pill:hover{border-color:var(--accent)}
+.pill[aria-pressed="true"]{background:var(--accent); border-color:var(--accent); color:var(--on-accent)}
+
+input[type=number]{
+  font-family:var(--font-num); font-size:16px; font-weight:500;
+  background:var(--bg); color:var(--fg); border:1px solid var(--line);
+  border-radius:3px; padding:7px 9px; width:100%; min-width:0}
+input:focus-visible,.pill:focus-visible,button:focus-visible{outline:2px solid var(--accent); outline-offset:1px}
+.custom{display:flex; align-items:center; gap:7px}
+.custom input{max-width:104px}
+.custom span{font-size:12.5px; color:var(--fg-dim)}
+
+.timefields{display:flex; align-items:flex-end; gap:7px; max-width:400px; width:100%}
+.tf{display:flex; flex-direction:column; gap:5px; align-items:center; min-width:0; flex:1 1 0}
+.tf.m{flex:0.85 1 0}
+.tf label{font-family:var(--font-head); font-size:10.5px; letter-spacing:.13em;
+  text-transform:uppercase; color:var(--fg-dim)}
+.tf input{
+  font-family:var(--font-num); font-size:clamp(27px,7.5vw,38px); font-weight:600;
+  text-align:center; letter-spacing:.02em; line-height:1.1;
+  padding:10px 2px; width:100%; min-width:0;
+  background:var(--surface); color:var(--fg);
+  border:1px solid var(--line); border-radius:4px;
+  -moz-appearance:textfield; appearance:textfield}
+.tf input::-webkit-outer-spin-button,.tf input::-webkit-inner-spin-button{-webkit-appearance:none; margin:0}
+.tf input:focus{border-color:var(--accent); outline:2px solid var(--accent); outline-offset:-1px}
+.sep{flex:0 0 auto; font-family:var(--font-num); font-weight:600; color:var(--fg-dim);
+  font-size:clamp(20px,5.5vw,29px); padding-bottom:12px}
+.goalwrap{display:flex; flex-wrap:wrap; gap:14px; align-items:flex-end}
+.addbtn{font-family:var(--font-head); font-size:15px; letter-spacing:.1em; text-transform:uppercase;
+  background:var(--accent); color:var(--on-accent); border:1px solid var(--accent);
+  border-radius:4px; padding:13px 22px; cursor:pointer; font-weight:500; flex:0 0 auto}
+.addbtn:hover{filter:brightness(1.08)}
+
+.setbar{display:flex; align-items:baseline; justify-content:space-between; gap:12px; flex-wrap:wrap}
+h2{font-family:var(--font-head); font-weight:500; font-size:19px; text-transform:uppercase;
+  letter-spacing:.07em; margin:0}
+.setbar .acts{display:flex; gap:7px}
+.tbtn{font-family:var(--font-body); font-size:13px; background:var(--surface); color:var(--fg);
+  border:1px solid var(--line); border-radius:3px; padding:6px 11px; cursor:pointer}
+.tbtn:hover{border-color:var(--accent)}
+.note{font-size:13px; color:var(--fg-dim); margin:0}
+
+.group{background:var(--surface); border:1px solid var(--line); border-radius:4px;
+  overflow:hidden; margin-bottom:16px}
+.ghdr{display:flex; align-items:baseline; justify-content:space-between; gap:12px;
+  padding:10px 15px; background:var(--accent); color:var(--on-accent)}
+.ghdr .gd{font-family:var(--font-head); font-size:17px; letter-spacing:.06em; text-transform:uppercase}
+.ghdr .gd .gs{opacity:.78; font-weight:400}
+.ghdr .gc{font-family:var(--font-num); font-size:12px}
+.tscroll{overflow-x:auto}
+table{border-collapse:separate; border-spacing:0; width:100%; font-variant-numeric:tabular-nums}
+th,td{padding:9px 11px; white-space:nowrap; border-bottom:1px solid var(--line); text-align:right}
+thead th{font-family:var(--font-head); font-size:11px; letter-spacing:.11em; text-transform:uppercase;
+  color:var(--fg-dim); font-weight:500; background:var(--surface-2)}
+tbody tr:last-child td{border-bottom:0}
+.stick{position:sticky; left:0; z-index:2; text-align:left;
+  background:var(--surface); border-right:1px solid var(--line); min-width:150px}
+thead .stick{background:var(--surface-2)}
+.rowmeta{display:flex; align-items:center; gap:9px}
+.goalval{font-family:var(--font-num); font-size:17px; font-weight:600}
+.del{margin-left:auto; background:none; border:0; color:var(--fg-dim); cursor:pointer;
+  font-size:18px; line-height:1; padding:3px 6px; border-radius:3px; flex:0 0 auto}
+.del:hover{color:var(--warn); background:var(--surface-2)}
+td.split{font-family:var(--font-num); font-size:16px; font-weight:500; line-height:1.15}
+td.split.lead{font-weight:600}
+td.split .mid{display:block; font-size:13px; font-weight:400; color:var(--fg-dim); margin-top:1px}
+.glegend{padding:7px 15px; background:var(--surface-2); border-bottom:1px solid var(--line);
+  font-size:12px; color:var(--fg-dim)}
+.glegend b{color:var(--fg); font-weight:600}
+
+.empty{background:var(--surface); border:1px dashed var(--line); border-radius:4px;
+  padding:22px 18px; color:var(--fg-dim)}
+.msg{background:var(--surface); border:1px solid var(--gold); border-left:4px solid var(--gold);
+  border-radius:4px; padding:11px 14px; margin:0 15px 13px}
+.toast{position:fixed; left:50%; transform:translateX(-50%);
+  bottom:calc(20px + env(safe-area-inset-bottom,0px));
+  background:var(--fg); color:var(--bg); font-size:14px; padding:10px 18px; border-radius:4px;
+  z-index:50; box-shadow:0 3px 14px rgba(0,0,0,.25)}
+.printonly{display:none}
+
+/* --- printed sheet: black on white, each table kept whole --- */
+@media print{
+  :root{
+    --bg:#ffffff; --surface:#ffffff; --surface-2:#ffffff; --line:#000000;
+    --fg:#000000; --fg-dim:#333333; --accent:#000000; --on-accent:#000000;
+    --gold:#000000; --warn:#000000;
+    color-scheme:light; padding:0;
+  }
+  @page{margin:14mm 12mm}
+  body{background:#fff; color:#000; font-size:11pt}
+  .wrap{max-width:none; margin:0; padding:0; gap:9px}
+  .panel,.setbar,.note,.empty,.toast,.del{display:none !important}
+  .printonly{display:block; font-size:10pt; color:#333; margin:0}
+  .masthead{border-bottom:2px solid #000; padding-bottom:6px; gap:2px}
+  .masthead .eyebrow{font-size:9pt; color:#333}
+  h1{font-size:20pt}
+  .group{border:1px solid #000; margin-bottom:9px;
+    break-inside:avoid; page-break-inside:avoid}
+  .ghdr{background:#fff !important; color:#000 !important;
+    border-bottom:1.5pt solid #000; padding:5px 9px}
+  .ghdr .gd{font-size:13pt}
+  .ghdr .gd .gs{opacity:1; font-weight:400}
+  .ghdr .gc{font-size:9pt; color:#333}
+  .tscroll{overflow:visible}
+  table{width:100%}
+  thead{display:table-header-group}
+  thead th{background:#fff !important; color:#000; font-size:8.5pt;
+    border-bottom:1pt solid #000; padding:4px 6px}
+  th,td{padding:4px 6px; border-bottom:.5pt solid #999}
+  tbody tr:last-child td{border-bottom:0}
+  .stick{position:static; min-width:0; border-right:1pt solid #000; background:#fff !important}
+  .rowmeta{gap:0}
+  .goalval{font-size:11pt}
+  td.split{font-size:10.5pt}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important; animation:none!important}}
+@media (max-width:560px){
+  .field{border-right:0}
+  th,td{padding:8px 9px}
+  .stick{min-width:136px}
+}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <div class="eyebrow">TSM Aquatics &middot; pace board</div>
+    <h1>TSM Split Calculator</h1>
+  </header>
+
+  <p class="printonly" id="printStamp"></p>
+
+  <div class="panel">
+    <div class="field">
+      <span class="key">Course</span>
+      <div class="pills" id="coursePills"></div>
+    </div>
+    <div class="field">
+      <span class="key">Stroke</span>
+      <div class="pills" id="strokePills"></div>
+    </div>
+    <div class="field">
+      <span class="key">Race distance</span>
+      <div class="pills" id="racePills"></div>
+      <div class="custom">
+        <input type="number" id="raceCustom" min="25" step="25" placeholder="other">
+        <span id="customUnit">yd</span>
+      </div>
+    </div>
+    <div class="field goal">
+      <span class="key">Goal time</span>
+      <div class="goalwrap">
+        <div class="timefields">
+          <div class="tf m">
+            <label for="tMin">Min</label>
+            <input id="tMin" type="number" inputmode="numeric" pattern="[0-9]*"
+                   min="0" max="99" step="1" value="5" autocomplete="off">
+          </div>
+          <span class="sep">:</span>
+          <div class="tf">
+            <label for="tSec">Sec</label>
+            <input id="tSec" type="number" inputmode="numeric" pattern="[0-9]*"
+                   min="0" max="59" step="1" value="00" autocomplete="off">
+          </div>
+          <span class="sep">.</span>
+          <div class="tf">
+            <label for="tHun">Hundredths</label>
+            <input id="tHun" type="number" inputmode="numeric" pattern="[0-9]*"
+                   min="0" max="99" step="1" value="00" autocomplete="off">
+          </div>
+        </div>
+        <button type="button" class="addbtn" id="addBtn">Add pace</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="setbar">
+    <h2>Saved paces</h2>
+    <div class="acts">
+      <button type="button" class="tbtn" id="printBtn">Print / PDF</button>
+      <button type="button" class="tbtn" id="copyBtn">Copy set</button>
+      <button type="button" class="tbtn" id="clearBtn">Clear all</button>
+    </div>
+  </div>
+
+  <div id="out"></div>
+
+</div>
+
+<script>
+"use strict";
+var $ = function(s){ return document.querySelector(s); };
+
+var COURSES = {
+  scy: { label:"25 yd", unit:"yd", len:25,
+         races:[50,100,200,400,500,1000,1650],
+         splits:[25,50,75,100,125,150,200] },
+  scm: { label:"25 m", unit:"m", len:25,
+         races:[50,100,200,400,800,1500],
+         splits:[50,100,150,200,300,400,500] },
+  lcm: { label:"50 m", unit:"m", len:50,
+         races:[50,100,200,400,800,1500],
+         splits:[50,100,150,200,300,400,500] }
+};
+
+/* Per-turn values, seconds. Set by Coach Mo. */
+var STROKES = {
+  free:   { label:"Free",   turn:0.50 },
+  back:   { label:"Back",   turn:0.60 },
+  breast: { label:"Breast", turn:1.00 },
+  fly:    { label:"Fly",    turn:1.00 }
+};
+/* Start allowance: a racing dive against a push off the wall, seconds. */
+var DIVE = 0.80;
+
+/* Mid-race pace runs above average pace, because the opening length of a race is
+   faster than the body of it. Anchors pair race distance in metres with the
+   measured excess of mid-race pace over even pace. Taken from 13 races whose
+   published 50m splits reconciled exactly to their final times: 4x200 LCM,
+   5x400 LCM, 3x800 LCM and one 500 SCY. Linear between anchors, flat outside. */
+var MIDRACE = [[200, 0.0225], [400, 0.0144], [800, 0.0081], [1500, 0.0050]];
+
+function midRaceExcess(distMeters){
+  var a = MIDRACE, last = a.length - 1;
+  if(!(distMeters > 0)) return 0;
+  if(distMeters <= a[0][0]) return a[0][1];
+  if(distMeters >= a[last][0]) return a[last][1];
+  for(var i = 0; i < last; i++){
+    if(distMeters <= a[i + 1][0]){
+      var t = (distMeters - a[i][0]) / (a[i + 1][0] - a[i][0]);
+      return a[i][1] + t * (a[i + 1][1] - a[i][1]);
+    }
+  }
+  return a[last][1];
+}
+
+function distMeters(e){
+  return COURSES[e.course].unit === "yd" ? e.dist * 0.9144 : e.dist;
+}
+
+var STORE_KEY = "tsm-split-calculator-v1";
+
+var draft = { course:"scy", stroke:"free", race:500 };
+var entries = [];
+
+var SEED = [
+  { course:"scy", stroke:"free", dist:500, goal:300, seed:true },
+  { course:"scy", stroke:"free", dist:500, goal:270, seed:true },
+  { course:"scy", stroke:"free", dist:200, goal:112, seed:true }
+];
+
+/* ---------- storage ---------- */
+function clone(o){
+  var n = {};
+  Object.keys(o).forEach(function(k){ n[k] = o[k]; });
+  return n;
+}
+function valid(e){
+  return e && COURSES[e.course] && STROKES[e.stroke] &&
+         isFinite(e.dist) && e.dist > 0 && isFinite(e.goal) && e.goal > 0;
+}
+function load(){
+  var raw = null;
+  try { raw = window.localStorage.getItem(STORE_KEY); } catch(err){ raw = null; }
+  if(!raw){
+    entries = SEED.map(function(e){ return clone(e); });
+    return;
+  }
+  try {
+    var parsed = JSON.parse(raw);
+    entries = Array.isArray(parsed) ? parsed.filter(valid) : [];
+  } catch(err){ entries = []; }
+}
+function save(){
+  try { window.localStorage.setItem(STORE_KEY, JSON.stringify(entries)); } catch(err){}
+}
+
+/* ---------- time helpers ---------- */
+function digits(v, cap){
+  var d = String(v == null ? "" : v).replace(/[^0-9]/g, "").slice(0, 2);
+  if(d === "") return null;
+  var n = parseInt(d, 10);
+  if(!isFinite(n)) return null;
+  return n > cap ? cap : n;
+}
+function readGoal(){
+  var m = digits($("#tMin").value, 99);
+  var s = digits($("#tSec").value, 59);
+  var h = digits($("#tHun").value, 99);
+  if(m === null && s === null && h === null) return NaN;
+  return (m || 0) * 60 + (s || 0) + (h || 0) / 100;
+}
+function fmt(sec){
+  if(!isFinite(sec)) return "—";
+  var total = Math.round(Math.abs(sec) * 100);
+  var whole = Math.floor(total / 100);
+  var frac = total - whole * 100;
+  var m = Math.floor(whole / 60);
+  var s = whole - m * 60;
+  var f = "." + String(frac).padStart(2, "0");
+  var body = m > 0 ? m + ":" + String(s).padStart(2, "0") + f : s + f;
+  return (sec < 0 ? "−" : "") + body;
+}
+
+/* ---------- the model ---------- */
+function lengthTime(e, mid){
+  var c = COURSES[e.course];
+  var turn = STROKES[e.stroke].turn;
+  var N = e.dist / c.len;
+  var goal = mid ? e.goal * (1 + midRaceExcess(distMeters(e))) : e.goal;
+  return { s:(goal + DIVE - (N - 1) * turn) / N, turn:turn, len:c.len };
+}
+function paceFor(e, splitDist, mid){
+  var m = lengthTime(e, mid);
+  if(!(m.s > 0)) return NaN;
+  var n = splitDist / m.len;
+  return n * m.s + (n - 1) * m.turn;
+}
+function splitsFor(course, dist){
+  return COURSES[course].splits.filter(function(d){ return d <= dist; });
+}
+
+/* ---------- builder controls ---------- */
+function mkPill(label, pressed, onClick){
+  var b = document.createElement("button");
+  b.type = "button";
+  b.className = "pill";
+  b.textContent = label;
+  b.setAttribute("aria-pressed", pressed ? "true" : "false");
+  b.addEventListener("click", onClick);
+  return b;
+}
+
+function buildPills(){
+  var cp = $("#coursePills");
+  cp.textContent = "";
+  Object.keys(COURSES).forEach(function(k){
+    cp.appendChild(mkPill(COURSES[k].label, draft.course === k, function(){
+      draft.course = k;
+      if(COURSES[k].races.indexOf(draft.race) === -1){ draft.race = (k === "scy") ? 500 : 400; }
+      $("#raceCustom").value = "";
+      buildPills();
+    }));
+  });
+
+  var sp = $("#strokePills");
+  sp.textContent = "";
+  Object.keys(STROKES).forEach(function(k){
+    sp.appendChild(mkPill(STROKES[k].label, draft.stroke === k, function(){
+      draft.stroke = k;
+      buildPills();
+    }));
+  });
+
+  var rp = $("#racePills");
+  rp.textContent = "";
+  COURSES[draft.course].races.forEach(function(d){
+    rp.appendChild(mkPill(String(d), draft.race === d, function(){
+      draft.race = d;
+      $("#raceCustom").value = "";
+      buildPills();
+    }));
+  });
+
+  $("#customUnit").textContent = COURSES[draft.course].unit;
+}
+
+/* ---------- grouping + output ---------- */
+var STROKE_ORDER = Object.keys(STROKES);
+
+function grouped(){
+  var map = {};
+  entries.forEach(function(e, i){
+    var key = e.course + "|" + e.dist + "|" + e.stroke;
+    if(!map[key]) map[key] = { course:e.course, dist:e.dist, stroke:e.stroke, rows:[] };
+    map[key].rows.push({ e:e, i:i });
+  });
+  var arr = Object.keys(map).map(function(k){ return map[k]; });
+  arr.sort(function(a, b){
+    if(a.dist !== b.dist) return a.dist - b.dist;
+    var sa = STROKE_ORDER.indexOf(a.stroke), sb = STROKE_ORDER.indexOf(b.stroke);
+    if(sa !== sb) return sa - sb;
+    return a.course < b.course ? -1 : 1;
+  });
+  arr.forEach(function(g){
+    g.rows.sort(function(x, y){ return y.e.goal - x.e.goal; });
+  });
+  return arr;
+}
+
+function renderOut(){
+  var out = $("#out");
+  if(entries.length === 0){
+    out.innerHTML = '<div class="empty">No paces saved. Pick a distance and a goal time above, ' +
+      "then tap <b>Add pace</b>. Add as many as you want and they group by distance.</div>";
+    return;
+  }
+
+  var html = "";
+  if(entries.some(function(e){ return e.seed; })){
+    html += '<p class="note" style="margin:-6px 0 10px">Starter rows to show the layout. ' +
+      "Delete them or clear the set once you add your own.</p>";
+  }
+
+  grouped().forEach(function(g){
+    var c = COURSES[g.course];
+    var cols = splitsFor(g.course, g.dist);
+    html += '<div class="group">';
+    html += '<div class="ghdr"><span class="gd">' + g.dist + " " + c.unit +
+      ' <span class="gs">' + STROKES[g.stroke].label + "</span>" +
+      '</span><span class="gc">' + c.label + " · " + g.rows.length +
+      (g.rows.length === 1 ? " pace" : " paces") + "</span></div>";
+
+    var bad = g.rows.filter(function(r){ return !(lengthTime(r.e).s > 0); });
+    if(bad.length){
+      html += '<div class="msg">' + bad.length + " goal time" +
+        (bad.length === 1 ? " is" : "s are") +
+        " too fast to be possible for this distance, so that row shows dashes.</div>";
+    }
+
+    html += '<div class="glegend">Top line <b>average pace</b>, bottom line <b>mid-race pace</b></div>';
+    html += '<div class="tscroll"><table><thead><tr><th class="stick">Goal</th>';
+    cols.forEach(function(d){ html += "<th>" + d + "</th>"; });
+    html += "</tr></thead><tbody>";
+
+    g.rows.forEach(function(r){
+      var e = r.e;
+      html += "<tr>";
+      html += '<td class="stick"><div class="rowmeta">' +
+        '<span class="goalval">' + fmt(e.goal) + "</span>" +
+        '<button type="button" class="del" data-i="' + r.i +
+        '" aria-label="Remove this pace" title="Remove">×</button>' +
+        "</div></td>";
+      cols.forEach(function(d){
+        html += '<td class="split' + (d === c.len ? " lead" : "") + '">' +
+          fmt(paceFor(e, d, false)) +
+          '<span class="mid">' + fmt(paceFor(e, d, true)) + "</span></td>";
+      });
+      html += "</tr>";
+    });
+
+    html += "</tbody></table></div></div>";
+  });
+
+  out.innerHTML = html;
+
+  Array.prototype.forEach.call(out.querySelectorAll(".del"), function(b){
+    b.addEventListener("click", function(){
+      var i = parseInt(b.getAttribute("data-i"), 10);
+      if(i >= 0 && i < entries.length){
+        entries.splice(i, 1);
+        save();
+        renderOut();
+      }
+    });
+  });
+}
+
+/* ---------- actions ---------- */
+function toast(text){
+  var t = document.createElement("div");
+  t.className = "toast";
+  t.textContent = text;
+  document.body.appendChild(t);
+  setTimeout(function(){ if(t.parentNode) t.parentNode.removeChild(t); }, 1900);
+}
+
+function addPace(){
+  var goal = readGoal();
+  if(!(goal > 0)){ toast("Enter a goal time first"); return; }
+  var dist = draft.race;
+  if(!(dist > 0)){ toast("Pick a race distance"); return; }
+
+  var dup = entries.some(function(e){
+    return e.course === draft.course && e.stroke === draft.stroke &&
+           e.dist === dist && Math.abs(e.goal - goal) < 0.005;
+  });
+  if(dup){ toast("That pace is already in the set"); return; }
+
+  entries.push({ course:draft.course, stroke:draft.stroke, dist:dist, goal:goal });
+  save();
+  renderOut();
+  toast("Added " + dist + " " + COURSES[draft.course].unit + " at " + fmt(goal));
+}
+
+function copySet(){
+  if(entries.length === 0){ toast("Nothing to copy yet"); return; }
+  var lines = ["TSM Split Calculator"];
+  grouped().forEach(function(g){
+    var c = COURSES[g.course];
+    var cols = splitsFor(g.course, g.dist);
+    lines.push("");
+    lines.push(g.dist + " " + c.unit + " " + STROKES[g.stroke].label + "  (" + c.label + ")");
+    g.rows.forEach(function(r){
+      var e = r.e;
+      lines.push("  goal " + fmt(e.goal));
+      lines.push("    avg       " + cols.map(function(d){
+        return d + " " + fmt(paceFor(e, d, false));
+      }).join("   "));
+      lines.push("    mid-race  " + cols.map(function(d){
+        return d + " " + fmt(paceFor(e, d, true));
+      }).join("   "));
+    });
+  });
+  var text = lines.join("\n");
+  try {
+    navigator.clipboard.writeText(text).then(function(){
+      toast("Set copied");
+    }, function(){ fallbackCopy(text); });
+  } catch(err){ fallbackCopy(text); }
+}
+
+function fallbackCopy(text){
+  var ta = document.createElement("textarea");
+  ta.value = text;
+  ta.setAttribute("readonly", "readonly");
+  ta.style.position = "fixed";
+  ta.style.top = "50%";
+  ta.style.left = "50%";
+  ta.style.width = "1px";
+  ta.style.height = "1px";
+  document.body.appendChild(ta);
+  ta.select();
+  ta.setSelectionRange(0, text.length);
+  toast("Copy with your keyboard or long-press");
+  setTimeout(function(){ if(ta.parentNode) ta.parentNode.removeChild(ta); }, 6000);
+}
+
+var clearArmed = false;
+function clearAll(){
+  if(entries.length === 0){ toast("Already empty"); return; }
+  if(!clearArmed){
+    clearArmed = true;
+    $("#clearBtn").textContent = "Tap again to clear";
+    setTimeout(function(){
+      clearArmed = false;
+      $("#clearBtn").textContent = "Clear all";
+    }, 3500);
+    return;
+  }
+  entries = [];
+  clearArmed = false;
+  $("#clearBtn").textContent = "Clear all";
+  save();
+  renderOut();
+  toast("Set cleared");
+}
+
+/* ---------- goal time fields ---------- */
+var FIELDS = [
+  { el:"#tMin", cap:99, pad:0, next:"#tSec" },
+  { el:"#tSec", cap:59, pad:2, next:"#tHun", prev:"#tMin" },
+  { el:"#tHun", cap:99, pad:2, prev:"#tSec" }
+];
+
+FIELDS.forEach(function(f){
+  var input = $(f.el);
+
+  input.addEventListener("focus", function(){
+    setTimeout(function(){ try { input.select(); } catch(err){} }, 0);
+  });
+
+  input.addEventListener("input", function(){
+    var raw = String(input.value).replace(/[^0-9]/g, "").slice(0, 2);
+    if(raw !== input.value) input.value = raw;
+    var n = raw === "" ? null : parseInt(raw, 10);
+    if(n !== null && n > f.cap) input.value = String(f.cap);
+    if(f.next && input.value.length === 2){
+      var nx = $(f.next);
+      nx.focus();
+      try { nx.select(); } catch(err){}
+    }
+  });
+
+  input.addEventListener("keydown", function(e){
+    if(e.key === "Backspace" && input.value === "" && f.prev){
+      e.preventDefault();
+      $(f.prev).focus();
+    }
+    if(e.key === "Enter"){ e.preventDefault(); addPace(); }
+  });
+
+  input.addEventListener("blur", function(){
+    var n = digits(input.value, f.cap);
+    input.value = n === null ? (f.pad ? "00" : "0")
+                             : (f.pad ? String(n).padStart(f.pad, "0") : String(n));
+  });
+});
+
+$("#raceCustom").addEventListener("input", function(e){
+  var v = Number(e.target.value);
+  if(isFinite(v) && v > 0){ draft.race = v; buildPills(); }
+});
+/* ---------- printing ---------- */
+function stampPrint(){
+  var el = $("#printStamp");
+  if(!el) return;
+  var n = entries.length;
+  var when = new Date().toLocaleDateString(undefined,
+    { year:"numeric", month:"long", day:"numeric" });
+  el.textContent = "Practice paces · " + n + (n === 1 ? " pace" : " paces") +
+    " · " + when;
+}
+
+function doPrint(){
+  if(entries.length === 0){ toast("Add a pace before printing"); return; }
+  stampPrint();
+  window.print();
+}
+
+window.addEventListener("beforeprint", stampPrint);
+
+$("#addBtn").addEventListener("click", addPace);
+$("#copyBtn").addEventListener("click", copySet);
+$("#clearBtn").addEventListener("click", clearAll);
+var printBtn = $("#printBtn");
+if(printBtn) printBtn.addEventListener("click", doPrint);
+
+load();
+buildPills();
+renderOut();
+stampPrint();
+</script>
+</body>
+</html>
